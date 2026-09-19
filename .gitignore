@@ -1,0 +1,28 @@
+# Galaxy (Jarvis)
+__pycache__/
+*.pyc
+*.pyo
+.env
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+
+# Web
+web/node_modules/
+web/.vite/
+
+# OS
+.DS_Store
+Thumbs.db
+*.log
+
+# Ollama models (large binaries)
+F:/Ollama/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
