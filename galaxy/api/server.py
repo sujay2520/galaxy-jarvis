@@ -206,8 +206,8 @@ async def revoke_permission(agent_id: str, permission: str):
 @app.get("/api/approvals")
 async def list_approvals():
     """List pending approval requests."""
-    return {
-        req_id: {
+    return [
+        {
             "id": req.id,
             "agent_id": req.agent_id,
             "action": req.action,
@@ -216,8 +216,8 @@ async def list_approvals():
             "status": req.status,
             "created_at": req.created_at,
         }
-        for req_id, req in approval_system.requests.items()
-    }
+        for req in approval_system.requests.values()
+    ]
 
 
 @app.post("/api/approve/{request_id}")

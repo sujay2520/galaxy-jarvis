@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Settings, Cpu, HardDrive, Server, Zap } from 'lucide-react';
+import { Settings, Cpu, HardDrive, Server, Zap, AlertTriangle, Check, X } from 'lucide-react';
+import { useTheme } from '../context/ThemeContext';
+import { ApprovalRequest } from '../types';
+import { getApprovals, resolveApproval } from '../services/api';
 
 interface SystemInfo {
   cpu?: string;
@@ -10,6 +13,7 @@ interface SystemInfo {
 }
 
 export default function SettingsView() {
+  const { colors } = useTheme();
   const [sysInfo, setSysInfo] = useState<SystemInfo>({});
   const [geminiKey, setGeminiKey] = useState('');
   const [groqKey, setGroqKey] = useState('');
@@ -17,6 +21,8 @@ export default function SettingsView() {
   const [provider, setProvider] = useState('Auto');
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
+  
+  const [approvals, setApprovals] = useState<ApprovalRequest[]>([]);
 
   useEffect(() => {
     fetch('http://localhost:8000/api/system-info')
@@ -26,6 +32,18 @@ export default function SettingsView() {
       })
       .then(data => setSysInfo(data))
       .catch(console.error);
+
+    const fetchApprovals = async () => {
+      try {
+        const data = await getApprovals();
+        setApprovals(data ? Object.values(data) : []);
+      } catch (err) {
+        console.error('Failed to fetch approvals:', err);
+      }
+    };
+    fetchApprovals();
+    const interval = setInterval(fetchApprovals, 3000);
+    return () => clearInterval(interval);
   }, []);
 
   const handleSave = async () => {
@@ -59,129 +77,217 @@ export default function SettingsView() {
     setTesting(false);
   };
 
-  return (
-    <div className="p-6 h-full overflow-y-auto" style={{ background: '#0a0a18' }}>
-      <div className="max-w-4xl mx-auto">
-        <div className="mb-8">
-          <h1 className="text-2xl font-bold text-white mb-1 flex items-center gap-2">
-            <Settings className="w-6 h-6 text-indigo-400" />
-            System Settings
-          </h1>
-          <p className="text-gray-400 text-sm">Configure hardware utilization and API keys</p>
-        </div>
+  const handleResolve = async (id: string, approved: boolean) => {
+    try {
+      await resolveApproval(id, approved);
+      setApprovals(prev => prev.filter(req => req.id !== id));
+    } catch (err) {
+      console.error('Failed to resolve approval:', err);
+    }
+  };
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-          <div 
-            className="border rounded-xl p-5 shadow-lg"
-            style={{ backgroundColor: '#12122a', borderColor: '#1e1e3a' }}
-          >
-            <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-              <Server className="w-5 h-5 text-indigo-400" /> System Specs
-            </h2>
-            <div className="space-y-4 text-sm">
-              <div className="flex items-center justify-between border-b pb-2" style={{ borderColor: '#1e1e3a' }}>
-                <span className="text-gray-400 flex items-center gap-2"><Cpu className="w-4 h-4"/> CPU</span>
-                <span className="text-white text-right">{sysInfo.cpu || 'Detecting...'}</span>
+  const getRiskColor = (risk: string) => {
+    switch (risk.toLowerCase()) {
+      case 'low': return '#4ade80';
+      case 'medium': return '#facc15';
+      case 'high': return '#fb923c';
+      case 'critical': return '#f87171';
+      default: return colors.textMuted;
+    }
+  };
+
+  return (
+    <div className="p-6 h-full overflow-y-auto" style={{ background: colors.bg }}>
+      <div className="max-w-4xl mx-auto space-y-10">
+        
+        {/* Settings Section */}
+        <div>
+          <div className="mb-8">
+            <h1 className="text-2xl font-bold mb-1 flex items-center gap-2" style={{ color: colors.text }}>
+              <Settings className="w-6 h-6" style={{ color: colors.accentLight }} />
+              System Settings
+            </h1>
+            <p className="text-sm" style={{ color: colors.textMuted }}>Configure hardware utilization and API keys</p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+            <div 
+              className="border rounded-xl p-5 shadow-lg"
+              style={{ backgroundColor: colors.card, borderColor: colors.border }}
+            >
+              <h2 className="text-lg font-semibold mb-4 flex items-center gap-2" style={{ color: colors.text }}>
+                <Server className="w-5 h-5" style={{ color: colors.accentLight }} /> System Specs
+              </h2>
+              <div className="space-y-4 text-sm">
+                <div className="flex items-center justify-between border-b pb-2" style={{ borderColor: colors.border }}>
+                  <span className="flex items-center gap-2" style={{ color: colors.textMuted }}><Cpu className="w-4 h-4"/> CPU</span>
+                  <span className="text-right" style={{ color: colors.text }}>{sysInfo.cpu || 'Detecting...'}</span>
+                </div>
+                <div className="flex items-center justify-between border-b pb-2" style={{ borderColor: colors.border }}>
+                  <span className="flex items-center gap-2" style={{ color: colors.textMuted }}><HardDrive className="w-4 h-4"/> RAM</span>
+                  <span className="text-right" style={{ color: colors.text }}>{sysInfo.ram || 'Detecting...'}</span>
+                </div>
+                <div className="flex items-center justify-between border-b pb-2" style={{ borderColor: colors.border }}>
+                  <span className="flex items-center gap-2" style={{ color: colors.textMuted }}><Zap className="w-4 h-4"/> GPU</span>
+                  <span className="text-right" style={{ color: colors.text }}>{sysInfo.gpu || 'Detecting...'}</span>
+                </div>
+                <div className="flex items-center justify-between pb-2">
+                  <span style={{ color: colors.textMuted }}>OS</span>
+                  <span className="text-right" style={{ color: colors.text }}>{sysInfo.os || 'Detecting...'}</span>
+                </div>
               </div>
-              <div className="flex items-center justify-between border-b pb-2" style={{ borderColor: '#1e1e3a' }}>
-                <span className="text-gray-400 flex items-center gap-2"><HardDrive className="w-4 h-4"/> RAM</span>
-                <span className="text-white text-right">{sysInfo.ram || 'Detecting...'}</span>
-              </div>
-              <div className="flex items-center justify-between border-b pb-2" style={{ borderColor: '#1e1e3a' }}>
-                <span className="text-gray-400 flex items-center gap-2"><Zap className="w-4 h-4"/> GPU</span>
-                <span className="text-white text-right">{sysInfo.gpu || 'Detecting...'}</span>
-              </div>
-              <div className="flex items-center justify-between pb-2">
-                <span className="text-gray-400">OS</span>
-                <span className="text-white text-right">{sysInfo.os || 'Detecting...'}</span>
+              {sysInfo.recommended_llm && (
+                <div className="mt-4 p-3 rounded-lg border text-sm" style={{ backgroundColor: colors.bg, borderColor: colors.border, color: colors.textMuted }}>
+                  <strong style={{ color: colors.accentLight }}>Recommended LLM:</strong> {sysInfo.recommended_llm}
+                </div>
+              )}
+            </div>
+
+            <div 
+              className="border rounded-xl p-5 shadow-lg"
+              style={{ backgroundColor: colors.card, borderColor: colors.border }}
+            >
+              <h2 className="text-lg font-semibold mb-4" style={{ color: colors.text }}>LLM Configuration</h2>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm mb-1" style={{ color: colors.textMuted }}>Preferred Provider</label>
+                  <select 
+                    value={provider}
+                    onChange={e => setProvider(e.target.value)}
+                    className="w-full bg-transparent border rounded-lg px-3 py-2 outline-none"
+                    style={{ borderColor: colors.border, backgroundColor: colors.bg, color: colors.text }}
+                  >
+                    <option value="Auto">Auto-select</option>
+                    <option value="Local Ollama">Local Ollama</option>
+                    <option value="Gemini">Gemini</option>
+                    <option value="Groq">Groq</option>
+                    <option value="Mistral">Mistral</option>
+                  </select>
+                </div>
+                
+                <div>
+                  <label className="block text-sm mb-1" style={{ color: colors.textMuted }}>Gemini API Key</label>
+                  <input 
+                    type="password" 
+                    value={geminiKey}
+                    onChange={e => setGeminiKey(e.target.value)}
+                    placeholder="AIzaSy..."
+                    className="w-full bg-transparent border rounded-lg px-3 py-2 outline-none"
+                    style={{ borderColor: colors.border, backgroundColor: colors.bg, color: colors.text }}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm mb-1" style={{ color: colors.textMuted }}>Groq API Key</label>
+                  <input 
+                    type="password" 
+                    value={groqKey}
+                    onChange={e => setGroqKey(e.target.value)}
+                    placeholder="gsk_..."
+                    className="w-full bg-transparent border rounded-lg px-3 py-2 outline-none"
+                    style={{ borderColor: colors.border, backgroundColor: colors.bg, color: colors.text }}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm mb-1" style={{ color: colors.textMuted }}>Mistral API Key</label>
+                  <input 
+                    type="password" 
+                    value={mistralKey}
+                    onChange={e => setMistralKey(e.target.value)}
+                    placeholder="Leave empty if not using"
+                    className="w-full bg-transparent border rounded-lg px-3 py-2 outline-none"
+                    style={{ borderColor: colors.border, backgroundColor: colors.bg, color: colors.text }}
+                  />
+                </div>
               </div>
             </div>
-            {sysInfo.recommended_llm && (
-              <div className="mt-4 p-3 rounded-lg border text-sm" style={{ backgroundColor: '#0a0a18', borderColor: '#1e1e3a', color: '#94a3b8' }}>
-                <strong className="text-indigo-400">Recommended LLM:</strong> {sysInfo.recommended_llm}
+          </div>
+
+          <div className="flex gap-4">
+            <button 
+              onClick={handleSave}
+              disabled={saving}
+              className="px-6 py-2 rounded-lg text-white font-medium transition-colors cursor-pointer"
+              style={{ backgroundColor: colors.accent, opacity: saving ? 0.7 : 1 }}
+            >
+              {saving ? 'Saving...' : 'Save Settings'}
+            </button>
+            <button 
+              onClick={handleTest}
+              disabled={testing}
+              className="px-6 py-2 rounded-lg font-medium transition-colors border cursor-pointer hover:opacity-80"
+              style={{ backgroundColor: colors.card, borderColor: colors.border, color: colors.text, opacity: testing ? 0.7 : 1 }}
+            >
+              {testing ? 'Testing...' : 'Test Connection'}
+            </button>
+          </div>
+        </div>
+
+        {/* Approvals Section */}
+        <div>
+          <div className="mb-6 pt-6 border-t" style={{ borderColor: colors.border }}>
+            <h2 className="text-xl font-bold mb-1" style={{ color: colors.text }}>Pending Approvals</h2>
+            <p className="text-sm" style={{ color: colors.textMuted }}>Actions requiring human authorization</p>
+          </div>
+
+          <div className="space-y-4">
+            {approvals.map(req => (
+              <div 
+                key={req.id} 
+                style={{ backgroundColor: colors.card, borderColor: colors.border }}
+                className="border rounded-xl p-5 flex flex-col md:flex-row gap-4 justify-between items-start md:items-center shadow-lg"
+              >
+                <div className="space-y-2 flex-1 w-full overflow-hidden">
+                  <div className="flex items-center gap-3">
+                    <span className="font-semibold" style={{ color: colors.text }}>Agent: {req.agent_id}</span>
+                    <span 
+                      className="px-2 py-0.5 rounded text-xs border flex items-center gap-1"
+                      style={{
+                        color: getRiskColor(req.risk),
+                        borderColor: getRiskColor(req.risk),
+                        backgroundColor: `${getRiskColor(req.risk)}20`
+                      }}
+                    >
+                      <AlertTriangle className="w-3 h-3" /> {req.risk.toUpperCase()}
+                    </span>
+                    <span className="text-xs hidden sm:inline" style={{ color: colors.textDim }}>
+                      {new Date(req.created_at * 1000).toLocaleString()}
+                    </span>
+                  </div>
+                  <div 
+                    className="font-mono text-sm p-2 rounded border break-all"
+                    style={{ color: colors.accent, backgroundColor: colors.bg, borderColor: colors.border }}
+                  >
+                    {req.action}
+                  </div>
+                  <p className="text-sm break-words" style={{ color: colors.textMuted }}>{JSON.stringify(req.details)}</p>
+                </div>
+                
+                <div className="flex gap-3 w-full md:w-auto mt-4 md:mt-0 shrink-0">
+                  <button 
+                    onClick={() => handleResolve(req.id, false)}
+                    className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2 rounded-lg border transition-colors hover:opacity-80"
+                    style={{ backgroundColor: colors.bg, borderColor: colors.border, color: colors.textMuted }}
+                  >
+                    <X className="w-4 h-4" /> Deny
+                  </button>
+                  <button 
+                    onClick={() => handleResolve(req.id, true)}
+                    className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-white transition-colors"
+                    style={{ backgroundColor: colors.accent }}
+                  >
+                    <Check className="w-4 h-4" /> Approve
+                  </button>
+                </div>
               </div>
+            ))}
+            {approvals.length === 0 && (
+              <div className="text-center py-12" style={{ color: colors.textDim }}>No pending approvals</div>
             )}
           </div>
-
-          <div 
-            className="border rounded-xl p-5 shadow-lg"
-            style={{ backgroundColor: '#12122a', borderColor: '#1e1e3a' }}
-          >
-            <h2 className="text-lg font-semibold text-white mb-4">LLM Configuration</h2>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm text-gray-400 mb-1">Preferred Provider</label>
-                <select 
-                  value={provider}
-                  onChange={e => setProvider(e.target.value)}
-                  className="w-full bg-transparent border rounded-lg px-3 py-2 text-white outline-none"
-                  style={{ borderColor: '#1e1e3a', backgroundColor: '#0a0a18' }}
-                >
-                  <option value="Auto">Auto-select</option>
-                  <option value="Local Ollama">Local Ollama</option>
-                  <option value="Gemini">Gemini</option>
-                  <option value="Groq">Groq</option>
-                  <option value="Mistral">Mistral</option>
-                </select>
-              </div>
-              
-              <div>
-                <label className="block text-sm text-gray-400 mb-1">Gemini API Key</label>
-                <input 
-                  type="password" 
-                  value={geminiKey}
-                  onChange={e => setGeminiKey(e.target.value)}
-                  placeholder="AIzaSy..."
-                  className="w-full bg-transparent border rounded-lg px-3 py-2 text-white outline-none placeholder-gray-600"
-                  style={{ borderColor: '#1e1e3a', backgroundColor: '#0a0a18' }}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm text-gray-400 mb-1">Groq API Key</label>
-                <input 
-                  type="password" 
-                  value={groqKey}
-                  onChange={e => setGroqKey(e.target.value)}
-                  placeholder="gsk_..."
-                  className="w-full bg-transparent border rounded-lg px-3 py-2 text-white outline-none placeholder-gray-600"
-                  style={{ borderColor: '#1e1e3a', backgroundColor: '#0a0a18' }}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm text-gray-400 mb-1">Mistral API Key</label>
-                <input 
-                  type="password" 
-                  value={mistralKey}
-                  onChange={e => setMistralKey(e.target.value)}
-                  placeholder="Leave empty if not using"
-                  className="w-full bg-transparent border rounded-lg px-3 py-2 text-white outline-none placeholder-gray-600"
-                  style={{ borderColor: '#1e1e3a', backgroundColor: '#0a0a18' }}
-                />
-              </div>
-            </div>
-          </div>
         </div>
 
-        <div className="flex gap-4">
-          <button 
-            onClick={handleSave}
-            disabled={saving}
-            className="px-6 py-2 rounded-lg text-white font-medium transition-colors cursor-pointer"
-            style={{ backgroundColor: '#4f46e5', opacity: saving ? 0.7 : 1 }}
-          >
-            {saving ? 'Saving...' : 'Save Settings'}
-          </button>
-          <button 
-            onClick={handleTest}
-            disabled={testing}
-            className="px-6 py-2 rounded-lg text-white font-medium transition-colors border cursor-pointer hover:bg-white/5"
-            style={{ backgroundColor: '#12122a', borderColor: '#1e1e3a', opacity: testing ? 0.7 : 1 }}
-          >
-            {testing ? 'Testing...' : 'Test Connection'}
-          </button>
-        </div>
       </div>
     </div>
   );
