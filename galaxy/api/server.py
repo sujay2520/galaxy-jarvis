@@ -257,7 +257,7 @@ async def chat(req: ChatRequest):
         # Direct chat with LLM
         try:
             messages = [
-                {"role": "system", "content": "You are Galaxy (Jarvis), a helpful AI assistant. Be concise and friendly."},
+                {"role": "system", "content": "You are Galaxy (Jarvis), a helpful AI assistant. Be concise, friendly, and helpful. Do NOT use emoji characters in your responses - use plain text only."},
                 {"role": "user", "content": message},
             ]
             response = await llm_router.generate(messages, complexity="simple")
@@ -345,7 +345,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 if msg.get("type") == "chat":
                     message = msg.get("message", "")
                     messages = [
-                        {"role": "system", "content": "You are Galaxy (Jarvis), a helpful AI assistant."},
+                        {"role": "system", "content": "You are Galaxy (Jarvis), a helpful AI assistant. Be concise, friendly, and helpful. Do NOT use emoji characters in your responses - use plain text only."},
                         {"role": "user", "content": message},
                     ]
                     try:

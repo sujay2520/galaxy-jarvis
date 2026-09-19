@@ -15,6 +15,7 @@ export default function ChatView() {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [listening, setListening] = useState(false);
+  // Track which tasks the user dispatched from THIS chat session
   const [messages, setMessages] = useState<IChatMessage[]>([
     {
       id: 'welcome',
@@ -29,6 +30,8 @@ export default function ChatView() {
   const recognitionRef = useRef<any>(null);
 
   // ── WebSocket: receive live agent events ──────────────────────
+  // Only show events for tasks the user dispatched from THIS chat session.
+  // All other agent events go to the Agents dashboard, not chat.
   useEffect(() => {
     function connect() {
       try {
@@ -38,27 +41,26 @@ export default function ChatView() {
         ws.onmessage = (e) => {
           try {
             const evt = JSON.parse(e.data);
-            if (evt.type === 'AgentStarted') {
-              addMessage({
-                role: 'agent',
-                agentName: evt.payload?.agent || 'Agent',
-                agentRole: 'Working',
-                content: `Started: ${evt.payload?.task || '...'}`,
-              });
-            } else if (evt.type === 'AgentCompleted') {
-              const output = evt.payload?.result?.output || 'Task completed.';
-              addMessage({
-                role: 'agent',
-                agentName: evt.payload?.agent || 'Agent',
-                agentRole: 'Done',
-                content: typeof output === 'string' ? output : JSON.stringify(output, null, 2),
-              });
-            } else if (evt.type === 'AgentError') {
+
+            // Only show TaskAssigned/TaskCompleted events in chat (orchestrator-level)
+            if (evt.type === 'TaskAssigned' && evt.source === 'orchestrator') {
               addMessage({
                 role: 'system',
-                content: `Agent error: ${evt.payload?.error || 'Unknown error'}`,
+                content: `Agents assigned to task: "${evt.payload?.description || '...'}"`,
               });
-            } else if (evt.type === 'ChatResponse') {
+            } else if (evt.type === 'TaskCompleted' && evt.source === 'orchestrator') {
+              addMessage({
+                role: 'system',
+                content: 'Task completed! Check the Agents tab for detailed results.',
+              });
+            } else if (evt.type === 'ApprovalRequired') {
+              addMessage({
+                role: 'system',
+                content: `[Approval Required] Agent needs permission for: ${evt.payload?.action || 'unknown action'} (${evt.payload?.risk || 'high'} risk). Go to Approvals tab to approve/deny.`,
+              });
+            }
+            // ChatResponse from WebSocket chat (if used)
+            else if (evt.type === 'ChatResponse') {
               addMessage({
                 role: 'agent',
                 agentName: 'Galaxy',
@@ -66,6 +68,8 @@ export default function ChatView() {
                 content: evt.payload?.message || '',
               });
             }
+            // Individual agent start/complete/error events are NOT shown in chat.
+            // They are visible in the Agents dashboard instead.
           } catch { /* ignore parse errors */ }
         };
 
@@ -116,7 +120,7 @@ export default function ChatView() {
         const res = await createTask(trimmed);
         addMessage({
           role: 'system',
-          content: `Task dispatched to agents. Status: ${res.status}. Agents are working — watch the Agents tab for live progress.`,
+          content: `Task dispatched to agents. Status: ${res.status}.\nAgents are working on it -- watch the Agents tab for live progress.`,
         });
       } else {
         // Direct LLM chat
@@ -132,7 +136,7 @@ export default function ChatView() {
     } catch (err) {
       addMessage({
         role: 'system',
-        content: `Connection error. Make sure the Galaxy server is running (start_galaxy.bat).`,
+        content: 'Connection error. Make sure the Galaxy server is running (start_galaxy.bat).',
       });
     } finally {
       setLoading(false);
@@ -185,7 +189,7 @@ export default function ChatView() {
         <div ref={endRef} />
       </div>
 
-      {/* Input bar — Antigravity style */}
+      {/* Input bar */}
       <div className="px-4 pb-4 pt-2" style={{ borderTop: '1px solid #1e1e3a' }}>
         <div className="flex items-center gap-2 max-w-4xl mx-auto">
           <div className="relative flex-1">
@@ -204,7 +208,6 @@ export default function ChatView() {
               }}
               disabled={loading}
             />
-            {/* Zap icon — hint for task mode */}
             {isTask(input) && (
               <div className="absolute right-3 top-1/2 -translate-y-1/2">
                 <span title="This will run as an agent task">
