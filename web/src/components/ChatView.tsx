@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Send, Mic, MicOff, Loader2, Zap } from 'lucide-react';
+import { Send, Mic, MicOff, Zap, Bot } from 'lucide-react';
 import ChatMessage from './ChatMessage';
 import { ChatMessage as IChatMessage } from '../types';
 import { chatAPI, createTask, WS_URL } from '../services/api';
@@ -17,6 +17,7 @@ export default function ChatView() {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [listening, setListening] = useState(false);
+  const [connected, setConnected] = useState(false);
   const [messages, setMessages] = useState<IChatMessage[]>([
     {
       id: 'welcome',
@@ -26,7 +27,7 @@ export default function ChatView() {
     },
   ]);
   const endRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const recognitionRef = useRef<any>(null);
 
@@ -35,6 +36,13 @@ export default function ChatView() {
       try {
         const ws = new WebSocket(WS_URL);
         wsRef.current = ws;
+
+        ws.onopen = () => setConnected(true);
+        ws.onclose = () => {
+          setConnected(false);
+          setTimeout(connect, 3000);
+        };
+        ws.onerror = () => setConnected(false);
 
         ws.onmessage = (e) => {
           try {
@@ -66,10 +74,6 @@ export default function ChatView() {
             }
           } catch { /* ignore parse errors */ }
         };
-
-        ws.onclose = () => {
-          setTimeout(connect, 3000);
-        };
       } catch { /* server not ready yet */ }
     }
 
@@ -94,6 +98,13 @@ export default function ChatView() {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setInput(e.target.value);
+    // Auto-resize
+    e.target.style.height = 'auto';
+    e.target.style.height = `${Math.min(e.target.scrollHeight, 150)}px`;
+  };
+
   const send = async (text: string) => {
     const trimmed = text.trim();
     if (!trimmed || loading) return;
@@ -105,6 +116,9 @@ export default function ChatView() {
       timestamp: new Date().toISOString(),
     }]);
     setInput('');
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+    }
     setLoading(true);
 
     try {
@@ -131,7 +145,14 @@ export default function ChatView() {
       });
     } finally {
       setLoading(false);
-      inputRef.current?.focus();
+      textareaRef.current?.focus();
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      send(input);
     }
   };
 
@@ -152,7 +173,7 @@ export default function ChatView() {
     rec.lang = 'en-US';
     rec.onresult = (e: any) => {
       const transcript = e.results[0][0].transcript;
-      setInput(transcript);
+      setInput(prev => prev ? prev + ' ' + transcript : transcript);
       setListening(false);
     };
     rec.onerror = () => setListening(false);
@@ -162,43 +183,67 @@ export default function ChatView() {
   };
 
   return (
-    <div className="flex flex-col h-full" style={{ background: colors.bg }}>
+    <div className="flex flex-col h-full relative" style={{ background: colors.bg }}>
+      {/* Header */}
+      <div className="hidden md:flex items-center justify-between px-6 py-4 shrink-0" style={{ borderBottom: `1px solid ${colors.border}` }}>
+        <div className="flex items-center gap-3">
+          <Bot className="w-6 h-6" style={{ color: colors.accent }} />
+          <h1 className="text-xl font-bold" style={{ color: colors.text }}>Galaxy Assistant</h1>
+        </div>
+        <div className="flex items-center gap-2">
+          <div 
+            className="w-2.5 h-2.5 rounded-full" 
+            style={{ backgroundColor: connected ? '#4ade80' : '#f87171' }}
+          />
+          <span className="text-sm font-medium" style={{ color: colors.textMuted }}>
+            {connected ? 'Connected' : 'Disconnected'}
+          </span>
+        </div>
+      </div>
+
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-1">
         {messages.map(msg => (
-          <ChatMessage key={msg.id} msg={msg} />
+          <div key={msg.id} className="fade-in">
+            <ChatMessage msg={msg} />
+          </div>
         ))}
         {loading && (
-          <div className="flex items-center gap-3 p-3">
+          <div className="flex items-center gap-3 p-3 fade-in">
             <div className="w-7 h-7 rounded-full flex items-center justify-center" style={{ background: colors.accent }}>
-              <Loader2 className="w-4 h-4 text-white animate-spin" />
+              <Bot className="w-4 h-4 text-white" />
             </div>
-            <span className="text-sm italic" style={{ color: colors.textMuted }}>Galaxy is thinking...</span>
+            <div className="flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: colors.accent, animationDelay: '0ms' }} />
+              <span className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: colors.accent, animationDelay: '150ms' }} />
+              <span className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: colors.accent, animationDelay: '300ms' }} />
+            </div>
           </div>
         )}
         <div ref={endRef} />
       </div>
 
       <div className="px-4 pb-4 pt-2" style={{ borderTop: `1px solid ${colors.border}` }}>
-        <div className="flex items-center gap-2 max-w-4xl mx-auto">
+        <div className="flex items-end gap-2 max-w-4xl mx-auto">
           <div className="relative flex-1">
-            <input
-              ref={inputRef}
-              type="text"
+            <textarea
+              ref={textareaRef}
               value={input}
-              onChange={e => setInput(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && !e.shiftKey && send(input)}
+              onChange={handleInput}
+              onKeyDown={handleKeyDown}
               placeholder="Type your message..."
-              className="w-full py-3 pl-4 pr-12 rounded-xl text-sm outline-none transition-all"
+              rows={1}
+              className="w-full py-3 pl-4 pr-12 rounded-xl text-sm outline-none transition-all resize-none"
               style={{
                 background: colors.card,
                 border: `1px solid ${colors.border}`,
                 color: colors.text,
                 caretColor: colors.accent,
+                minHeight: '46px',
               }}
               disabled={loading}
             />
             {isTask(input) && (
-              <div className="absolute right-3 top-1/2 -translate-y-1/2">
+              <div className="absolute right-3 bottom-3.5">
                 <span title="This will run as an agent task">
                   <Zap className="w-4 h-4 text-yellow-500" />
                 </span>
@@ -208,7 +253,7 @@ export default function ChatView() {
 
           <button
             onClick={toggleVoice}
-            className="p-3 rounded-xl transition-colors"
+            className="p-3 rounded-xl transition-colors shrink-0 h-[46px] flex items-center justify-center"
             style={{
               background: listening ? colors.accent : colors.card,
               border: `1px solid ${colors.border}`,
@@ -224,7 +269,7 @@ export default function ChatView() {
           <button
             onClick={() => send(input)}
             disabled={!input.trim() || loading}
-            className="p-3 rounded-xl transition-all"
+            className="p-3 rounded-xl transition-all shrink-0 h-[46px] flex items-center justify-center"
             style={{
               background: input.trim() && !loading ? colors.accent : colors.card,
               border: `1px solid ${colors.border}`,

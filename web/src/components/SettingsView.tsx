@@ -5,10 +5,12 @@ import { ApprovalRequest } from '../types';
 import { getApprovals, resolveApproval } from '../services/api';
 
 interface SystemInfo {
-  cpu?: string;
-  ram?: string;
-  gpu?: string;
-  os?: string;
+  os_name?: string;
+  cpu_count?: number;
+  ram_gb?: number;
+  disk_free_gb?: number;
+  gpu_name?: string;
+  vram_gb?: number;
   recommended_llm?: string;
 }
 
@@ -21,6 +23,7 @@ export default function SettingsView() {
   const [provider, setProvider] = useState('Auto');
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
+  const [toastMsg, setToastMsg] = useState('');
   
   const [approvals, setApprovals] = useState<ApprovalRequest[]>([]);
 
@@ -30,7 +33,9 @@ export default function SettingsView() {
         if (res.ok) return res.json();
         return {};
       })
-      .then(data => setSysInfo(data))
+      .then((data: SystemInfo) => {
+        setSysInfo(data);
+      })
       .catch(console.error);
 
     const fetchApprovals = async () => {
@@ -46,6 +51,11 @@ export default function SettingsView() {
     return () => clearInterval(interval);
   }, []);
 
+  const showToast = (msg: string) => {
+    setToastMsg(msg);
+    setTimeout(() => setToastMsg(''), 3000);
+  };
+
   const handleSave = async () => {
     setSaving(true);
     try {
@@ -55,13 +65,13 @@ export default function SettingsView() {
         body: JSON.stringify({ geminiKey, groqKey, mistralKey, provider })
       });
       if (res.ok) {
-        alert('Settings saved!');
+        showToast('Settings saved successfully!');
       } else {
-        alert('Failed to save settings');
+        showToast('Failed to save settings');
       }
     } catch (err) {
       console.error(err);
-      alert('Failed to save settings');
+      showToast('Failed to save settings');
     }
     setSaving(false);
   };
@@ -70,9 +80,9 @@ export default function SettingsView() {
     setTesting(true);
     try {
       await new Promise(resolve => setTimeout(resolve, 1000));
-      alert('Connection successful!');
+      showToast('Connection successful!');
     } catch (err) {
-      alert('Connection failed');
+      showToast('Connection failed');
     }
     setTesting(false);
   };
@@ -81,8 +91,10 @@ export default function SettingsView() {
     try {
       await resolveApproval(id, approved);
       setApprovals(prev => prev.filter(req => req.id !== id));
+      showToast(approved ? 'Action approved' : 'Action denied');
     } catch (err) {
       console.error('Failed to resolve approval:', err);
+      showToast('Failed to resolve approval');
     }
   };
 
@@ -97,7 +109,17 @@ export default function SettingsView() {
   };
 
   return (
-    <div className="p-6 h-full overflow-y-auto" style={{ background: colors.bg }}>
+    <div className="p-6 h-full overflow-y-auto fade-in relative" style={{ background: colors.bg }}>
+      {/* Toast Notification */}
+      {toastMsg && (
+        <div 
+          className="fixed top-4 left-1/2 -translate-x-1/2 px-4 py-2 rounded-full shadow-lg text-sm font-medium z-50 animate-bounce"
+          style={{ backgroundColor: colors.accent, color: '#fff' }}
+        >
+          {toastMsg}
+        </div>
+      )}
+
       <div className="max-w-4xl mx-auto space-y-10">
         
         {/* Settings Section */}
@@ -121,19 +143,19 @@ export default function SettingsView() {
               <div className="space-y-4 text-sm">
                 <div className="flex items-center justify-between border-b pb-2" style={{ borderColor: colors.border }}>
                   <span className="flex items-center gap-2" style={{ color: colors.textMuted }}><Cpu className="w-4 h-4"/> CPU</span>
-                  <span className="text-right" style={{ color: colors.text }}>{sysInfo.cpu || 'Detecting...'}</span>
+                  <span className="text-right font-medium truncate max-w-[150px]" style={{ color: colors.text }}>{sysInfo.cpu_count ? `${sysInfo.cpu_count} cores` : 'Detecting...'}</span>
                 </div>
                 <div className="flex items-center justify-between border-b pb-2" style={{ borderColor: colors.border }}>
                   <span className="flex items-center gap-2" style={{ color: colors.textMuted }}><HardDrive className="w-4 h-4"/> RAM</span>
-                  <span className="text-right" style={{ color: colors.text }}>{sysInfo.ram || 'Detecting...'}</span>
+                  <span className="text-right font-medium" style={{ color: colors.text }}>{sysInfo.ram_gb ? `${sysInfo.ram_gb.toFixed(1)} GB` : 'Detecting...'}</span>
                 </div>
                 <div className="flex items-center justify-between border-b pb-2" style={{ borderColor: colors.border }}>
                   <span className="flex items-center gap-2" style={{ color: colors.textMuted }}><Zap className="w-4 h-4"/> GPU</span>
-                  <span className="text-right" style={{ color: colors.text }}>{sysInfo.gpu || 'Detecting...'}</span>
+                  <span className="text-right font-medium truncate max-w-[150px]" style={{ color: colors.text }} title={sysInfo.gpu_name}>{sysInfo.gpu_name || 'Detecting...'}</span>
                 </div>
                 <div className="flex items-center justify-between pb-2">
                   <span style={{ color: colors.textMuted }}>OS</span>
-                  <span className="text-right" style={{ color: colors.text }}>{sysInfo.os || 'Detecting...'}</span>
+                  <span className="text-right font-medium truncate max-w-[150px]" style={{ color: colors.text }}>{sysInfo.os_name || 'Detecting...'}</span>
                 </div>
               </div>
               {sysInfo.recommended_llm && (
@@ -150,11 +172,11 @@ export default function SettingsView() {
               <h2 className="text-lg font-semibold mb-4" style={{ color: colors.text }}>LLM Configuration</h2>
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm mb-1" style={{ color: colors.textMuted }}>Preferred Provider</label>
+                  <label className="block text-sm font-medium mb-1.5" style={{ color: colors.textMuted }}>Preferred Provider</label>
                   <select 
                     value={provider}
                     onChange={e => setProvider(e.target.value)}
-                    className="w-full bg-transparent border rounded-lg px-3 py-2 outline-none"
+                    className="w-full bg-transparent border rounded-lg px-3 py-2 outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 transition-shadow"
                     style={{ borderColor: colors.border, backgroundColor: colors.bg, color: colors.text }}
                   >
                     <option value="Auto">Auto-select</option>
@@ -166,37 +188,37 @@ export default function SettingsView() {
                 </div>
                 
                 <div>
-                  <label className="block text-sm mb-1" style={{ color: colors.textMuted }}>Gemini API Key</label>
+                  <label className="block text-sm font-medium mb-1.5" style={{ color: colors.textMuted }}>Gemini API Key</label>
                   <input 
                     type="password" 
                     value={geminiKey}
                     onChange={e => setGeminiKey(e.target.value)}
                     placeholder="AIzaSy..."
-                    className="w-full bg-transparent border rounded-lg px-3 py-2 outline-none"
+                    className="w-full bg-transparent border rounded-lg px-3 py-2 outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 transition-shadow"
                     style={{ borderColor: colors.border, backgroundColor: colors.bg, color: colors.text }}
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm mb-1" style={{ color: colors.textMuted }}>Groq API Key</label>
+                  <label className="block text-sm font-medium mb-1.5" style={{ color: colors.textMuted }}>Groq API Key</label>
                   <input 
                     type="password" 
                     value={groqKey}
                     onChange={e => setGroqKey(e.target.value)}
                     placeholder="gsk_..."
-                    className="w-full bg-transparent border rounded-lg px-3 py-2 outline-none"
+                    className="w-full bg-transparent border rounded-lg px-3 py-2 outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 transition-shadow"
                     style={{ borderColor: colors.border, backgroundColor: colors.bg, color: colors.text }}
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm mb-1" style={{ color: colors.textMuted }}>Mistral API Key</label>
+                  <label className="block text-sm font-medium mb-1.5" style={{ color: colors.textMuted }}>Mistral API Key</label>
                   <input 
                     type="password" 
                     value={mistralKey}
                     onChange={e => setMistralKey(e.target.value)}
                     placeholder="Leave empty if not using"
-                    className="w-full bg-transparent border rounded-lg px-3 py-2 outline-none"
+                    className="w-full bg-transparent border rounded-lg px-3 py-2 outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 transition-shadow"
                     style={{ borderColor: colors.border, backgroundColor: colors.bg, color: colors.text }}
                   />
                 </div>
@@ -208,7 +230,7 @@ export default function SettingsView() {
             <button 
               onClick={handleSave}
               disabled={saving}
-              className="px-6 py-2 rounded-lg text-white font-medium transition-colors cursor-pointer"
+              className="px-6 py-2.5 rounded-lg text-white font-medium transition-colors cursor-pointer"
               style={{ backgroundColor: colors.accent, opacity: saving ? 0.7 : 1 }}
             >
               {saving ? 'Saving...' : 'Save Settings'}
@@ -216,7 +238,7 @@ export default function SettingsView() {
             <button 
               onClick={handleTest}
               disabled={testing}
-              className="px-6 py-2 rounded-lg font-medium transition-colors border cursor-pointer hover:opacity-80"
+              className="px-6 py-2.5 rounded-lg font-medium transition-colors border cursor-pointer hover:opacity-80"
               style={{ backgroundColor: colors.card, borderColor: colors.border, color: colors.text, opacity: testing ? 0.7 : 1 }}
             >
               {testing ? 'Testing...' : 'Test Connection'}
@@ -236,13 +258,13 @@ export default function SettingsView() {
               <div 
                 key={req.id} 
                 style={{ backgroundColor: colors.card, borderColor: colors.border }}
-                className="border rounded-xl p-5 flex flex-col md:flex-row gap-4 justify-between items-start md:items-center shadow-lg"
+                className="border rounded-xl p-5 flex flex-col md:flex-row gap-4 justify-between items-start md:items-center shadow-lg transition-all"
               >
                 <div className="space-y-2 flex-1 w-full overflow-hidden">
                   <div className="flex items-center gap-3">
                     <span className="font-semibold" style={{ color: colors.text }}>Agent: {req.agent_id}</span>
                     <span 
-                      className="px-2 py-0.5 rounded text-xs border flex items-center gap-1"
+                      className="px-2 py-0.5 rounded text-xs border flex items-center gap-1 font-medium"
                       style={{
                         color: getRiskColor(req.risk),
                         borderColor: getRiskColor(req.risk),
@@ -256,25 +278,25 @@ export default function SettingsView() {
                     </span>
                   </div>
                   <div 
-                    className="font-mono text-sm p-2 rounded border break-all"
+                    className="font-mono text-sm p-3 rounded border break-all"
                     style={{ color: colors.accent, backgroundColor: colors.bg, borderColor: colors.border }}
                   >
                     {req.action}
                   </div>
-                  <p className="text-sm break-words" style={{ color: colors.textMuted }}>{JSON.stringify(req.details)}</p>
+                  <p className="text-sm break-words mt-1" style={{ color: colors.textMuted }}>{JSON.stringify(req.details)}</p>
                 </div>
                 
                 <div className="flex gap-3 w-full md:w-auto mt-4 md:mt-0 shrink-0">
                   <button 
                     onClick={() => handleResolve(req.id, false)}
-                    className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2 rounded-lg border transition-colors hover:opacity-80"
+                    className="flex-1 md:flex-none flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg border transition-colors hover:opacity-80"
                     style={{ backgroundColor: colors.bg, borderColor: colors.border, color: colors.textMuted }}
                   >
                     <X className="w-4 h-4" /> Deny
                   </button>
                   <button 
                     onClick={() => handleResolve(req.id, true)}
-                    className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-white transition-colors"
+                    className="flex-1 md:flex-none flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg text-white transition-colors hover:opacity-90 shadow-sm"
                     style={{ backgroundColor: colors.accent }}
                   >
                     <Check className="w-4 h-4" /> Approve
@@ -283,7 +305,10 @@ export default function SettingsView() {
               </div>
             ))}
             {approvals.length === 0 && (
-              <div className="text-center py-12" style={{ color: colors.textDim }}>No pending approvals</div>
+              <div className="text-center py-16 border rounded-xl border-dashed" style={{ borderColor: colors.border, color: colors.textDim }}>
+                <Check className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                No pending approvals
+              </div>
             )}
           </div>
         </div>

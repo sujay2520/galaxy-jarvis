@@ -13,6 +13,11 @@ venv/
 web/node_modules/
 web/.vite/
 
+# Desktop (Electron)
+desktop/node_modules/
+desktop/dist/
+desktop/out/
+
 # OS
 .DS_Store
 Thumbs.db
