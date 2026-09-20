@@ -264,7 +264,7 @@ async def chat(req: ChatRequest):
             return ChatResponse(response=response, is_task=False)
         except Exception as e:
             return ChatResponse(
-                response=f"[!] LLM unavailable: {e}\n\nMake sure Ollama is running or API keys are configured in .env",
+                response=f"[!] LLM unavailable: {e}\n\nGo to Settings and add an API key (Gemini, Groq, or Mistral) to enable chat. If running locally, make sure Ollama is running.",
                 is_task=False,
             )
 

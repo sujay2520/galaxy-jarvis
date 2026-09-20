@@ -38,10 +38,12 @@ def print_banner():
     print("="*65 + "\n")
 
 if __name__ == "__main__":
+    # Render.com sets PORT env var; use it if present
+    port = int(os.environ.get("PORT", settings.PORT))
     print_banner()
     uvicorn.run(
         "galaxy.api.server:app",
         host="0.0.0.0",
-        port=settings.PORT,
+        port=port,
         reload=False
     )

@@ -14,13 +14,13 @@
   },
   "build": {
     "appId": "com.galaxy.jarvis",
-    "productName": "Galaxy",
+    "productName": "Galaxy Jarvis",
+    "asar": true,
     "directories": {
       "output": "dist"
     },
     "win": {
-      "target": "nsis",
-      "icon": "build/icon.ico"
+      "target": "portable"
     },
     "linux": {
       "target": "AppImage",

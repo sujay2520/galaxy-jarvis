@@ -1,4 +1,9 @@
-const API = 'http://localhost:8000';
+// Use relative URLs so it works on any host (localhost, Render, phone, etc.)
+const API = '';
+
+// WebSocket URL: auto-detect protocol (ws/wss) and host
+const wsProto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+export const WS_URL = `${wsProto}//${window.location.host}/ws`;
 
 export async function chatAPI(message: string) {
   const res = await fetch(`${API}/api/chat`, {
@@ -54,4 +59,3 @@ export async function getAuditLog(limit = 100) {
   return res.json();
 }
 
-export const WS_URL = 'ws://localhost:8000/ws';

@@ -28,7 +28,7 @@ export default function SettingsView() {
   const [approvals, setApprovals] = useState<ApprovalRequest[]>([]);
 
   useEffect(() => {
-    fetch('http://localhost:8000/api/system-info')
+    fetch('/api/system-info')
       .then(res => {
         if (res.ok) return res.json();
         return {};
@@ -59,7 +59,7 @@ export default function SettingsView() {
   const handleSave = async () => {
     setSaving(true);
     try {
-      const res = await fetch('http://localhost:8000/api/settings', {
+      const res = await fetch('/api/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ geminiKey, groqKey, mistralKey, provider })
